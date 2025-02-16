@@ -1,0 +1,18 @@
+{
+    "rust-analyzer": {
+        "cargo": {
+            "features": [
+                "ssr",
+                "hydrate"
+            ]
+        },
+        "procMacro.ignored": {
+            "leptos_macro": [
+                "server"
+            ]
+        },
+        "rustfmt": {
+            "overrideCommand": "leptosfmt --stdin --rustfmt"
+        }
+    }
+}

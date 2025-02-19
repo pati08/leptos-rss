@@ -1,7 +1,7 @@
 #![feature(let_chains)]
 
 use cfg_if::cfg_if;
-use leptos_axum_template::socket::{ServerMessage, UserMessage};
+use rss_chat::socket::{ServerMessage, UserMessage};
 
 cfg_if! {
     if #[cfg(feature = "ssr")] {
@@ -15,6 +15,11 @@ cfg_if! {
         use futures::stream::{SplitSink, SplitStream};
         use std::time::Duration;
         use std::sync::{Arc, Mutex};
+
+        mod ai;
+        use ai::AiContext;
+
+        mod commands;
     }
 }
 
@@ -33,6 +38,7 @@ enum ServerStateMessage {
 struct AppStateExt {
     state_broadcast_tx: tokio::sync::broadcast::Sender<ServerMessage>,
     state_tx: tokio::sync::mpsc::Sender<ServerStateMessage>,
+    ai_context: Arc<AiContext>,
 }
 
 #[cfg(feature = "ssr")]
@@ -41,7 +47,7 @@ async fn main() {
     use leptos::logging::log;
     use leptos::prelude::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
-    use leptos_axum_template::app::*;
+    use rss_chat::app::*;
 
     env_logger::init();
 
@@ -61,11 +67,17 @@ async fn main() {
     let (state_tx, mut state_rx) =
         tokio::sync::mpsc::channel(STATE_CHANNEL_CAPACITY);
 
+    let ai_context = AiContext::new(
+        &std::env::var("GROQ_API_KEY").expect("No api key provided"),
+    );
+
     let app_state = AppStateExt {
         state_broadcast_tx: state_broadcast_tx.clone(),
         state_tx,
+        ai_context: Arc::new(ai_context),
     };
 
+    let app_state_2 = app_state.clone();
     tokio::spawn(async move {
         let typing_counters: Arc<Mutex<Vec<(String, u64)>>> =
             Arc::new(Mutex::new(vec![]));
@@ -134,25 +146,40 @@ async fn main() {
                 ServerStateMessage::UserJoined { name } => {
                     if !online_users.contains(&name) {
                         online_users.push(name);
-                        send_msg(ServerMessage::OnlineUsersUpdate {
-                            users: online_users.clone(),
-                        });
                     }
+                    send_msg(ServerMessage::OnlineUsersUpdate {
+                        users: online_users.clone(),
+                    });
                 }
                 ServerStateMessage::NewMessage { mut message } => {
+                    let original = message.clone();
                     message.id = current_message_id;
                     current_message_id += 1;
-                    send_msg(ServerMessage::MessageSent { message });
+                    message.message = message
+                        .message
+                        .lines()
+                        .map(|line| line.trim_end()) // Trim trailing spaces
+                        .collect::<Vec<_>>() // Collect into a Vec
+                        .join("  \n"); // Join with Markdown's line break syntax (two spaces + newline)
+                    message.message = markdown::to_html(&message.message);
+                    log::debug!("Sending message:\n{message:?}");
+                    send_msg(ServerMessage::MessageSent {
+                        message: message.clone(),
+                    });
+                    let app_state = app_state.clone();
+                    tokio::spawn(async move {
+                        commands::react_to_message(original, app_state).await;
+                    });
                 }
                 ServerStateMessage::UserDisconnected { name } => {
                     if let Some(idx) =
                         online_users.iter().position(|i| i == &name)
                     {
                         online_users.remove(idx);
-                        send_msg(ServerMessage::OnlineUsersUpdate {
-                            users: online_users.clone(),
-                        });
                     }
+                    send_msg(ServerMessage::OnlineUsersUpdate {
+                        users: online_users.clone(),
+                    });
                 }
                 ServerStateMessage::UserReadMessages { user, earliest } => {
                     send_msg(ServerMessage::MessagesRead {
@@ -172,7 +199,7 @@ async fn main() {
         .route("/api/ws", get(handler))
         .fallback(leptos_axum::file_and_error_handler(shell))
         .with_state(leptos_options)
-        .layer(Extension(app_state));
+        .layer(Extension(app_state_2));
 
     log!("listening on http://{}", &addr);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
@@ -213,7 +240,7 @@ async fn handle_socket_read(
 ) {
     use codee::{binary::MsgpackSerdeCodec, HybridDecoder};
     use futures::StreamExt;
-    use leptos_axum_template::socket::*;
+    use rss_chat::socket::*;
     use std::time::{Duration, Instant};
 
     const HEARTBEAT_MAX_INTERVAL: Duration = Duration::from_secs(5);

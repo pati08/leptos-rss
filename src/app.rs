@@ -1,8 +1,12 @@
-use std::{rc::Rc, sync::Arc};
+use std::sync::Arc;
 
 use codee::string::FromToStringCodec;
-use js_sys::{Array, Object};
-use leptos::{ev::SubmitEvent, html::Input, prelude::*};
+use js_sys::Object;
+use leptos::{
+    ev::SubmitEvent,
+    html::{Input, Textarea},
+    prelude::*,
+};
 use leptos_meta::{provide_meta_context, MetaTags, Stylesheet, Title};
 use leptos_router::{
     components::{Route, Router, Routes},
@@ -44,10 +48,10 @@ pub fn App() -> impl IntoView {
     view! {
         // injects a stylesheet into the document <head>
         // id=leptos means cargo-leptos will hot-reload this stylesheet
-        <Stylesheet id="leptos" href="/pkg/leptos-axum-template.css"/>
+        <Stylesheet id="leptos" href="/pkg/rss-chat.css"/>
 
         // sets the document title
-        <Title text="Welcome to Leptos"/>
+        <Title text="RSS Chat"/>
 
         // content for this welcome page
         <Router>
@@ -62,8 +66,41 @@ pub fn App() -> impl IntoView {
 
 #[component]
 fn HomePage() -> impl IntoView {
+    use leptos_use::{use_permission, PermissionState};
     let (name, set_name) = use_cookie::<String, FromToStringCodec>("rss-name");
+
+    let notification_permission = use_permission("notifications");
+    let req_perm_node_ref: NodeRef<leptos::html::Dialog> = NodeRef::new();
+
+    Effect::new(move || match notification_permission.get() {
+        PermissionState::Prompt => {
+            if let Some(v) = req_perm_node_ref.get() {
+                let _ = v.show_modal();
+            }
+        }
+        _ => {
+            if let Some(v) = req_perm_node_ref.get() {
+                v.close();
+            }
+        }
+    });
+
     view! {
+        <dialog class="p-8 rounded" node_ref=req_perm_node_ref>
+            <button
+                class="p-3 rounded shadow bg-gray-100 hover:bg-gray-200 active:bg-gray-400 transition"
+                on:click=|_| {
+                    let Ok(promise) = web_sys::Notification::request_permission() else {
+                        return;
+                    };
+                    leptos::task::spawn_local(async move {
+                        let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+                    });
+                }
+            >
+                "Allow notifications"
+            </button>
+        </dialog>
         {move || match name.get() {
             Some(name) => view! {<Feed name=name/>}.into_any(),
             _ => view! {<SelectName set_name=set_name/>}.into_any(),
@@ -182,7 +219,7 @@ fn Feed(name: String) -> impl IntoView {
     }
 
     let (message_input, set_message_input) = signal(String::new());
-    let message_node_ref: NodeRef<leptos::html::Textarea> = NodeRef::new();
+    let message_node_ref: NodeRef<Textarea> = NodeRef::new();
 
     let on_submit = {
         let connection = connection.clone();
@@ -191,14 +228,14 @@ fn Feed(name: String) -> impl IntoView {
             connection.send_message(name.clone(), message_input.get());
             set_message_input.set(String::new());
             if let Some(message_el) = message_node_ref.get() {
-                message_el.focus();
+                let _ = message_el.focus();
             }
         }
     };
 
-    let (users_info_open, set_users_info_open) = signal(false);
+    let (users_info_open, set_users_info_open) = signal(true);
     let user_info_div_classes = move || {
-        "absolute right-8 top-8 p-4 rounded shadow transition-all bg-white"
+        "absolute right-8 bottom-28 p-4 rounded shadow transition-all bg-white"
             .to_string()
             + if users_info_open.get() {
                 " w-60 h-60"
@@ -207,18 +244,47 @@ fn Feed(name: String) -> impl IntoView {
             }
     };
 
-    let (emoji_picker_open, set_emoji_picker_open) = signal(true);
+    let (emoji_picker_open, set_emoji_picker_open) = signal(false);
 
     view! {
-        <EmojiPicker callback={
-            let connection = connection.clone();
-            move |emoji| {
-                set_message_input.update(|v| v.push_str(&emoji));
-                connection.type_();
-                set_emoji_picker_open(false);
+        {
+            move || {
+                let typing_users: Vec<_> = users
+                    .get()
+                    .into_iter()
+                    .filter(|i| i.1)
+                    .map(|i| view! {
+                        <li>
+                            {i.0} " is typing..."
+                        </li>
+                    })
+                    .collect();
+                if typing_users.len() > 0 {
+                    view! {
+                        <div class="absolute top-4 right-4 p-4 rounded shadow">
+                            <ul class="list-none">
+                                {typing_users}
+                            </ul>
+                        </div>
+                    }.into_any()
+                } else {
+                    view! {}.into_any()
+                }
             }
         }
-        open=emoji_picker_open.into()/>
+        {
+            let connection = connection.clone();
+            view! {
+                <EmojiPicker
+                    callback=move |emoji: String| {
+                        set_message_input.update(|v| v.push_str(&emoji));
+                        connection.type_();
+                        set_emoji_picker_open.set(false);
+                    }
+                    open=emoji_picker_open.into()
+                />
+            }
+        }
         <div
             class=user_info_div_classes
             on:click=move |_ev| if !users_info_open.get() {
@@ -267,8 +333,9 @@ fn Feed(name: String) -> impl IntoView {
                     prop:value=message_input
                     node_ref=message_node_ref
                 ></textarea>
-                <button type="submit" class="h-12 basis-10 cursor-pointer rounded-sm bg-gray-50 px-3 font-bold shadow-xl ring-2 ring-gray-100 transition hover:bg-gray-800 hover:text-white hover:ring-0">"Send"</button>
+                <img src="emoji.png" class="max-h-full hover:cursor-pointer" on:click=move |_ev| set_emoji_picker_open.set(true) />
             </div>
+            <button type="submit" class="h-12 basis-10 cursor-pointer rounded-sm bg-gray-50 px-3 font-bold shadow-xl ring-2 ring-gray-100 transition hover:bg-gray-800 hover:text-white hover:ring-0">"Send"</button>
         </form>
     }
 }
@@ -299,7 +366,7 @@ fn Messages(
                     <div class="hover:bg-gray-200 transition flex flex-row w-full">
                         <div class="grow">
                             <div class="font-bold text-gray-700">{ let message = message.clone(); move || message.get().message.sender }</div>
-                            <div>{ let message = message.clone(); move || message.get().message.message }</div>
+                            <div inner_html={ let message = message.clone(); move || message.get().message.message }></div>
                         </div>
                         <div class="text-right text-gray-700 flex flex-row items-center shrink-0">
                             <div class="text-right w-full">
@@ -328,11 +395,19 @@ fn UsersList(
         >
             "❌"
         </button>
-        <ol class="list-decimal">
-            {move || users.get().into_iter().map(|i| view!{
-                <li class="ml-6">{i.0} {if i.1 { " ⌨️" } else { "" }}</li>
-            }).collect::<Vec<_>>()}
-        </ol>
+        {move || if users.get().len() == 0 {
+            view! {
+                <p>"No other users online"</p>
+            }.into_any()
+        } else {
+            view! {
+                <ol class="list-decimal">
+                    {users.get().into_iter().map(|i| view!{
+                        <li class="ml-6">{i.0} {if i.1 { " ⌨️" } else { "" }}</li>
+                    }).collect::<Vec<_>>()}
+                </ol>
+            }.into_any()
+        }}
     }
 }
 

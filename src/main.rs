@@ -56,6 +56,10 @@ async fn main() {
 
     const TYPING_TIME: Duration = Duration::from_millis(1500);
 
+    let cors_layer = tower_http::cors::CorsLayer::new()
+        .allow_methods([axum::http::Method::GET, axum::http::Method::POST])
+        .allow_origin("https://static.cloudflareinsights.com".parse::<axum::http::header::HeaderValue>().unwrap());
+
     let conf = get_configuration(None).unwrap();
     let addr = conf.leptos_options.site_addr;
     let leptos_options = conf.leptos_options;
@@ -199,7 +203,8 @@ async fn main() {
         .route("/api/ws", get(handler))
         .fallback(leptos_axum::file_and_error_handler(shell))
         .with_state(leptos_options)
-        .layer(Extension(app_state_2));
+        .layer(Extension(app_state_2))
+        .layer(cors_layer);
 
     log!("listening on http://{}", &addr);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();

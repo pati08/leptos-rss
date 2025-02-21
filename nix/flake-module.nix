@@ -18,13 +18,9 @@ in
           rss-chat.rustToolchain = lib.mkOption {
             type = lib.types.package;
             description = "Rust toolchain to use for the rss-chat package";
-            default = (pkgs.rust-bin.fromRustupToolchainFile (self + /rust-toolchain.toml)).override {
-              extensions = [
-                "rust-src"
-                "rust-analyzer"
-                "clippy"
-              ];
-            };
+            default = (pkgs.rust-bin.nightly.latest.default.override {
+              extensions = [ "rust-src" "rust-analyzer" "rustfmt" "rustc-codegen-cranelift-preview" ];
+            });
           };
 
           rss-chat.craneLib = lib.mkOption {
@@ -42,10 +38,11 @@ in
               filter = path: type:
                 ((lib.hasSuffix "\.html" path) ||
                 (lib.hasSuffix "\.txt" path) ||
+                (lib.hasSuffix "\.toml" path) ||
                 # (lib.hasSuffix "\.env" path) ||
                 (lib.hasSuffix "tailwind.config.js" path) ||
                 # Example of a folder for images, icons, etc
-                (lib.hasInfix "/assets/" path) ||
+                (lib.hasInfix "/public/" path) ||
                 (lib.hasInfix "/style/" path) ||
                 (lib.hasInfix "/css/" path) ||
                 (lib.hasInfix "/\.sqlx/" path) ||

@@ -175,7 +175,7 @@ fn parse_commands(
 const HELP_MESSAGE: &str = "Valid commands:
 - !ai <message> - ask a question to the default bot (greg)
 - !ask <bot> <message> - ask a question to a bot by name
-- !newbot <name> [lang:<language>] <instructions> - create a new
+- !newbot <name> [lang=<language>] <instructions> - create a new
 bot that follows custom instructions
 - !listbots - list bots by name
 - !removebot <bot> - remove a bot (you can only remove a bot you created)

@@ -24,11 +24,7 @@ pub async fn react_to_message(message: UserMessage, state: AppStateExt) {
             MessageCommand::AIQuery { bot, query } => {
                 let response = state
                     .ai_context
-                    .get_response(
-                        &query,
-                        &user,
-                        bot.as_ref().map(|x| x.as_str()),
-                    )
+                    .get_response(&query, &user, bot.as_deref())
                     .await;
                 match response {
                     Ok(response) => {
@@ -137,11 +133,7 @@ fn parse_commands(
     {
         let name = command_input.split_whitespace().nth(1).unwrap();
         let lang_word = command_input.split_whitespace().nth(2).unwrap();
-        let lang = if lang_word.starts_with("lang=") {
-            Some(lang_word[5..].to_string())
-        } else {
-            None
-        };
+        let lang = lang_word.strip_prefix("lang=").map(|v| v.to_string());
         let customizations = command_input
             .chars()
             .skip(6)

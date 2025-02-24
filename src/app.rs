@@ -114,7 +114,7 @@ fn validate_name(name: &str) -> bool {
     !(name.ends_with("(bot)")
         | name.contains("system")
         | name.contains("admin")
-        | (name.len() == 0))
+        | (name.is_empty()))
 }
 
 #[component]
@@ -187,9 +187,10 @@ fn Feed(name: String) -> impl IntoView {
     {
         use leptos::web_sys::VisibilityState;
         let conn = connection.clone();
-        let visibility = visibility.clone();
-        Effect::new(move || match conn.message.get() {
-            Some(ServerMessage::MessageSent { message }) => {
+        Effect::new(move || {
+            if let Some(ServerMessage::MessageSent { message }) =
+                conn.message.get()
+            {
                 match visibility.get() {
                     VisibilityState::Hidden => (use_web_notification().show)(
                         leptos_use::ShowOptions::default()
@@ -200,7 +201,6 @@ fn Feed(name: String) -> impl IntoView {
                     _ => (),
                 }
             }
-            _ => (),
         });
     }
     // Read receipts when returning to the page
@@ -259,16 +259,16 @@ fn Feed(name: String) -> impl IntoView {
                         </li>
                     })
                     .collect();
-                if typing_users.len() > 0 {
+                if typing_users.is_empty() {
                     view! {
-                        <div class="absolute top-4 right-4 p-4 rounded shadow">
+                        <div class="absolute top-4 right-4 p-4 rounded shadow bg-white">
                             <ul class="list-none">
                                 {typing_users}
                             </ul>
                         </div>
                     }.into_any()
                 } else {
-                    view! {}.into_any()
+                    ().into_any()
                 }
             }
         }
@@ -355,8 +355,8 @@ fn Messages(
                     {let message = message.clone(); let name = name.clone(); move || {
                         let message = message.get();
                         let read_by = message.read_by.into_iter().filter(|i| *i != name && *i != message.message.sender).collect::<Vec<_>>();
-                        if read_by.len() == 0 {
-                            view!{}.into_any()
+                        if read_by.is_empty() {
+                            ().into_any()
                         } else {
                             view!{
                                 <div>"Read by: " {read_by.join(", ")}</div>
@@ -395,7 +395,7 @@ fn UsersList(
         >
             "❌"
         </button>
-        {move || if users.get().len() == 0 {
+        {move || if users.get().is_empty() {
             view! {
                 <p>"No other users online"</p>
             }.into_any()

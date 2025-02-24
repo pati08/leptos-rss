@@ -13,6 +13,9 @@
         },
         "rustfmt": {
             "overrideCommand": "leptosfmt --stdin --rustfmt"
+        },
+        "check": {
+            "command": "clippy"
         }
     }
 }

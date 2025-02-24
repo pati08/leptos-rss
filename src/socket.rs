@@ -81,8 +81,8 @@ where
         self.online.read_only()
     }
     pub fn users(&self) -> Signal<Vec<(String, bool)>> {
-        let typing = self.typing.clone();
-        let online = self.online.clone();
+        let typing = self.typing;
+        let online = self.online;
         Signal::derive(move || {
             online
                 .get()
@@ -105,7 +105,6 @@ where
         let typing = RwSignal::new(vec![]);
         let online: RwSignal<Vec<String>> = RwSignal::new(vec![]);
         {
-            let last_message = last_message.clone();
             Effect::new(move || {
                 last_message.with(move |last_message| match last_message {
                     None => (),
@@ -129,8 +128,8 @@ where
                         .update(move |typing| {
                             *typing = typing
                                 .iter()
+                                .filter(|i| *i != user)
                                 .cloned()
-                                .filter(|i| i != user)
                                 .collect();
                         }),
                     Some(ServerMessage::OnlineUsersUpdate { users }) => {
@@ -154,7 +153,6 @@ where
             });
         }
         {
-            let ready = ready.clone();
             let send = send.clone();
             Effect::new(move |prev: Option<bool>| match ready.get() {
                 ConnectionReadyState::Open => {
@@ -198,7 +196,7 @@ where
         (self.send)(&ClientMessage::ReadMessages { earliest });
     }
     pub fn ready(&self) -> Signal<ConnectionReadyState> {
-        self.ready.clone()
+        self.ready
     }
     pub fn type_(&self) {
         (self.send)(&ClientMessage::Typed);

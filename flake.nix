@@ -143,6 +143,7 @@
           dart-sass
           tailwindcss
           dive
+          cargo-leptos
         ];
       };
     };

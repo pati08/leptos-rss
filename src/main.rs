@@ -44,6 +44,8 @@ struct AppStateExt {
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
+    use std::collections::HashMap;
+
     use leptos::logging::log;
     use leptos::prelude::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
@@ -55,10 +57,6 @@ async fn main() {
     const STATE_CHANNEL_CAPACITY: usize = 8;
 
     const TYPING_TIME: Duration = Duration::from_millis(1500);
-
-    let cors_layer = tower_http::cors::CorsLayer::new()
-        .allow_methods([axum::http::Method::GET, axum::http::Method::POST])
-        .allow_origin("https://static.cloudflareinsights.com".parse::<axum::http::header::HeaderValue>().unwrap());
 
     let conf = get_configuration(None).unwrap();
     let addr = conf.leptos_options.site_addr;
@@ -90,7 +88,7 @@ async fn main() {
         let state_broadcast_tx = state_broadcast_tx.clone();
         let mut current_message_id = 0;
 
-        let mut online_users: Vec<String> = Vec::new();
+        let mut online_users: HashMap<String, u8> = HashMap::new();
 
         let send_msg = move |msg: ServerMessage| {
             if let Err(e) = state_broadcast_tx.send(msg) {
@@ -105,7 +103,7 @@ async fn main() {
                         let mut counters = typing_counters.lock().unwrap();
                         let mut typing_users = typing_users.lock().unwrap();
 
-                        if !typing_users.contains(&name) {
+                        if !typing_users.contains(name) {
                             typing_users.push(name.clone());
                             send_msg(ServerMessage::UserTyping {
                                 user: name.clone(),
@@ -148,11 +146,14 @@ async fn main() {
                     }
                 }
                 ServerStateMessage::UserJoined { name } => {
-                    if !online_users.contains(&name) {
-                        online_users.push(name);
-                    }
+                    *online_users.entry(name).or_default() += 1;
+
                     send_msg(ServerMessage::OnlineUsersUpdate {
-                        users: online_users.clone(),
+                        users: online_users
+                            .iter()
+                            .filter(|(_n, i)| **i > 0)
+                            .map(|(n, _i)| n.clone())
+                            .collect(),
                     });
                 }
                 ServerStateMessage::NewMessage { mut message } => {
@@ -176,13 +177,17 @@ async fn main() {
                     });
                 }
                 ServerStateMessage::UserDisconnected { name } => {
-                    if let Some(idx) =
-                        online_users.iter().position(|i| i == &name)
-                    {
-                        online_users.remove(idx);
+                    let ent = online_users.entry(name.clone()).or_default();
+                    *ent = ent.saturating_sub(1);
+                    if *ent == 0 {
+                        online_users.remove(&name);
                     }
                     send_msg(ServerMessage::OnlineUsersUpdate {
-                        users: online_users.clone(),
+                        users: online_users
+                            .iter()
+                            .filter(|(_n, i)| **i > 0)
+                            .map(|(n, _i)| n.clone())
+                            .collect(),
                     });
                 }
                 ServerStateMessage::UserReadMessages { user, earliest } => {
@@ -203,8 +208,7 @@ async fn main() {
         .route("/api/ws", get(handler))
         .fallback(leptos_axum::file_and_error_handler(shell))
         .with_state(leptos_options)
-        .layer(Extension(app_state_2))
-        .layer(cors_layer);
+        .layer(Extension(app_state_2));
 
     log!("listening on http://{}", &addr);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();

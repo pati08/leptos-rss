@@ -267,6 +267,8 @@ fn Feed(name: String) -> impl IntoView {
                     })
                     .collect();
                 if typing_users.is_empty() {
+                    ().into_any()
+                } else {
                     view! {
                         <div class="absolute top-4 right-4 p-4 rounded shadow bg-white">
                             <ul class="list-none">
@@ -274,8 +276,6 @@ fn Feed(name: String) -> impl IntoView {
                             </ul>
                         </div>
                     }.into_any()
-                } else {
-                    ().into_any()
                 }
             }
         }

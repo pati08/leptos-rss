@@ -45,10 +45,17 @@ pub fn App() -> impl IntoView {
     // Provides context that manages stylesheets, titles, meta tags, etc.
     provide_meta_context();
 
+    let style_url = if std::env::var("NIX_BUILD").is_ok_and(|v| v == "1") {
+        let version = env!("CARGO_PKG_VERSION");
+        format!("/pkg/rss-chat-{version}.css")
+    } else {
+        "/pkg/rss-chat.css".to_string()
+    };
+
     view! {
         // injects a stylesheet into the document <head>
         // id=leptos means cargo-leptos will hot-reload this stylesheet
-        <Stylesheet id="leptos" href="/pkg/rss-chat.css"/>
+        <Stylesheet id="leptos" href=style_url/>
 
         // sets the document title
         <Title text="RSS Chat"/>

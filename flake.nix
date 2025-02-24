@@ -14,8 +14,12 @@
         inherit system;
         overlays = [ (import rust-overlay) ];
       };
-      cargoPkgName = "rss-chat";
-      lib = pkgs.lib;
+      inherit (pkgs) lib;
+
+      tomlNameInfo = craneLib.crateNameFromCargoToml { cargoToml = ./Cargo.toml; };
+      cargoPkgName = tomlNameInfo.pname;
+      inherit (tomlNameInfo) version;
+
       src = lib.cleanSourceWith {
         src = ./.;
         filter = path: type:
@@ -41,7 +45,6 @@
         extensions = [ "rust-src" "rust-analyzer" "rustfmt" "rustc-codegen-cranelift-preview" ];
         targets = [ "wasm32-unknown-unknown" "x86_64-unknown-linux-gnu" ];
       };
-
       craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
       commonArgs = {
@@ -58,19 +61,17 @@
       serverArtifacts = craneLib.buildDepsOnly serverArgs;
       wasmArtifacts = craneLib.buildDepsOnly wasmArgs;
 
-
       # Build server binary with SSR feature
       server = craneLib.buildPackage (serverArgs // {
         cargoArtifacts = serverArtifacts;
       });
-
       # Build WASM with hydrate feature
       wasm = craneLib.buildPackage (wasmArgs // {
         cargoArtifacts = wasmArtifacts;
       });
-
+      # Build the site directory 
       siteDerivation = pkgs.stdenv.mkDerivation {
-        name = "leptos-ssr-site";
+        name = "${cargoPkgName}-site";
         src = self;
 
         buildInputs = with pkgs; [
@@ -86,18 +87,18 @@
 
         buildPhase = ''
           # Build Tailwind CSS
-          tailwindcss -i ./style/tailwind.css -o $out/target/site/pkg/${cargoPkgName}.css
+          tailwindcss -i ./style/tailwind.css -o $out/target/site/pkg/${cargoPkgName}-${version}.css
           
           # Process WASM
           wasm-bindgen --target web --out-dir $out/target/site/pkg \
             --reference-types \
             ${wasm}/bin/${cargoPkgName}.wasm
 
-          wasm-opt -Oz -o $out/target/site/pkg/${cargoPkgName}_bg.wasm \
+          wasm-opt -Oz -o $out/target/site/pkg/${cargoPkgName}-${version}_bg.wasm \
             $out/target/site/pkg/${cargoPkgName}_bg.wasm
+
+          mv $out/target/site/pkg/${cargoPkgName}.js $out/target/site/pkg/${cargoPkgName}-${version}.js
         '';
-        #
-        # installPhase = '''';
       };
 
       dockerImage = pkgs.dockerTools.buildImage {
@@ -105,18 +106,14 @@
         tag = "latest";
 
         copyToRoot = [ server siteDerivation ];
-        # runAsRoot = /* sh */ ''
-        #   #!${pkgs.runtimeShell}
-        #   mkdir site
-        #   mv site-derivation/*/site .
-        #   rm -r site-derivation
-        # '';
+
         config = {
           Cmd = [ "${server}/bin/${cargoPkgName}" ];
           Env = [
             "LEPTOS_SITE_DIR=target/site"
             "LEPTOS_SITE_ADDR=0.0.0.0:3000"
-            "LEPTOS_OUTPUT_NAME=${cargoPkgName}"
+            "LEPTOS_OUTPUT_NAME=${cargoPkgName}-${version}"
+            "NIX_BUILD=1"
           ];
         };
       };

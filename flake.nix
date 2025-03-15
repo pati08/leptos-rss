@@ -25,15 +25,11 @@
         filter = path: type:
           ((lib.hasSuffix "\.html" path) ||
           (lib.hasSuffix "\.txt" path) ||
-          # (lib.hasSuffix "\.toml" path) ||
-          # (lib.hasSuffix "\.env" path) ||
           (lib.hasSuffix "tailwind.config.js" path) ||
-          # Example of a folder for images, icons, etc
           (lib.hasInfix "/public/" path) ||
           (lib.hasInfix "/style/" path) ||
-          (lib.hasInfix "/css/" path) ||
+          (lib.hasInfix "/src/" path) ||
           (lib.hasInfix "/\.sqlx/" path) ||
-          # Default filter from crane (allow .rs files)
           (craneLib.filterCargoSources path type))
           && !(
             (lib.hasInfix "/cargo_cache/" path) ||
@@ -145,65 +141,3 @@
       };
     };
 }
-
-# {
-#   inputs = {
-#     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-#     flake-parts.url = "github:hercules-ci/flake-parts";
-#     systems.url = "github:nix-systems/default";
-#
-#     rust-overlay.url = "github:oxalica/rust-overlay";
-#     crane.url = "github:ipetkov/crane";
-#     crane.inputs.nixpkgs.follows = "nixpkgs";
-#   };
-#
-#   outputs = inputs:
-#     inputs.flake-parts.lib.mkFlake { inherit inputs; } {
-#       systems = import inputs.systems;
-#       imports = [
-#         ./nix/flake-module.nix
-#       ];
-#       perSystem = { config, self', pkgs, lib, system, ... }: let
-#         binPkg = self'.packages.rss-chat;
-#         dockerImage = pkgs.dockerTools.buildImage {
-#           name = "rss-chat";
-#           tag = "latest";
-#
-#           copyToRoot = [ binPkg ];
-#           config = {
-#             Env = [ "RUST_LOG=info" ];
-#             Entrypoint = [ "${binPkg}/rss-chat" ];
-#           };
-#         };
-#       in {
-#         _module.args.pkgs = import inputs.nixpkgs {
-#           inherit system;
-#           overlays = [
-#             inputs.rust-overlay.overlays.default
-#           ];
-#         };
-#
-#         packages = {
-#           inherit binPkg dockerImage;
-#           default = binPkg;
-#         };
-#
-#         devShells.default = pkgs.mkShell {
-#           buildInputs = with pkgs; [
-#             just
-#             irust
-#             leptosfmt
-#             cargo-leptos
-#             mold
-#             dart-sass
-#             tailwindcss
-#             binaryen
-#             (rust-bin.nightly.latest.default.override {
-#               extensions = [ "rust-src" "rust-analyzer" "rustfmt" "rustc-codegen-cranelift-preview" ];
-#               targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
-#             })
-#           ];
-#         };
-#       };
-#     };
-# }

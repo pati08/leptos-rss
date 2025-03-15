@@ -12,6 +12,21 @@
     ol {
         @apply list-decimal pl-6
     }
+    td {
+        @apply p-4 border-b border-gray-50
+    }
+    table {
+        @apply w-1/2 text-left table-auto min-w-max shadow rounded
+    }
+    th {
+        @apply p-4 border-b border-gray-100 bg-gray-50
+    }
+    blockquote {
+        @apply p-4 my-4 border-s-4 border-gray-300 bg-gray-50
+    }
+    blockquote.dark {
+        @apply border-gray-500 bg-gray-800
+    }
 }
 
 @layer components {}

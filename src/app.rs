@@ -371,7 +371,7 @@ fn Messages(
                         }
                     }}
                     <div class="hover:bg-gray-200 transition flex flex-row w-full">
-                        <div class="grow">
+                        <div class="grow pr-8">
                             <div class="font-bold text-gray-700">{ let message = message.clone(); move || message.get().message.sender }</div>
                             <div inner_html={ let message = message.clone(); move || message.get().message.message }></div>
                         </div>

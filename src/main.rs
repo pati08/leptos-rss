@@ -166,7 +166,40 @@ async fn main() {
                         .map(|line| line.trim_end()) // Trim trailing spaces
                         .collect::<Vec<_>>() // Collect into a Vec
                         .join("  \n"); // Join with Markdown's line break syntax (two spaces + newline)
-                    message.message = markdown::to_html(&message.message);
+
+                    // Configure commonmark extensions
+                    let mut comrak_options = comrak::Options::default();
+                    macro_rules! enable_exts {
+                        ($($x:ident),+ $(,)?) => {{
+                            $(
+                                comrak_options.extension.$x = true;
+                            )*
+                        }};
+                    }
+                    enable_exts! {
+                        table,
+                        strikethrough,
+                        autolink,
+
+                        // TODO: Implement CSS for this
+                        alerts,
+
+                        // TODO: Implement mathjax to SVG, then add math things
+
+                        wikilinks_title_after_pipe,
+                        underline,
+                        subscript,
+                        multiline_block_quotes,
+                    };
+                    comrak_options.render.hardbreaks = true;
+                    comrak_options.render.escape = true;
+                    comrak_options.render.ignore_empty_links = true;
+                    comrak_options.parse.smart = true;
+
+                    message.message = comrak::markdown_to_html(
+                        &message.message,
+                        &comrak_options,
+                    );
                     log::debug!("Sending message:\n{message:?}");
                     send_msg(ServerMessage::MessageSent {
                         message: message.clone(),

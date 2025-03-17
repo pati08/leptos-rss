@@ -10,30 +10,31 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-leptos = { version = "0.7.0", features = ["nightly"] }
-leptos_router = { version = "0.7.0", features = ["nightly"] }
+leptos = { version = "0.7.0", features = [ "nightly" ] }
+leptos_router = { version = "0.7.0", features = [ "nightly" ] }
 axum = { version = "0.7", optional = true, features = ["ws"] }
 console_error_panic_hook = { version = "0.1", optional = true}
 leptos_axum = { version = "0.7.0", optional = true }
 leptos_meta = { version = "0.7.0" }
-tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
+tokio = { version = "1", features = [ "rt-multi-thread" ], optional = true }
 wasm-bindgen = { version = "=0.2.100", optional = true }
 cfg-if = "1.0.0"
-leptos-use = { version = "0.15.6", features = ["use_websocket", "use_document_visibility", "use_web_notification", "use_permission"] }
-codee = { version = "0.2.0", features = ["msgpack_serde"] }
-serde = { version = "1.0.217", features = ["derive"] }
-chrono = { version = "0.4.39", features = ["serde"] }
+leptos-use = { version = "0.15.6", features = [ "use_websocket", "use_document_visibility", "use_web_notification", "use_permission" ] }
+codee = { version = "0.2.0", features = [ "msgpack_serde" ] }
+serde = { version = "1.0.217", features = [ "derive" ] }
+chrono = { version = "0.4.39", features = [ "serde" ] }
 log = "0.4.25"
 futures = { version = "0.3.31", optional = true }
 env_logger = { version = "0.11.6", optional = true }
-console_log = { version = "1.0.0", optional = true, features = ["color"] }
+console_log = { version = "1.0.0", optional = true, features = [ "color" ] }
 js-sys = "0.3.77"
 web-sys = { version = "0.3.72", features = [ "Notification" ] }
 async-openai = { version = "0.27.2", default-features = false, features = [ "rustls-webpki-roots" ], optional = true }
 thiserror = { version = "2.0.11", optional = true }
 comrak = { version = "0.36.0", optional = true }
 wasm-bindgen-futures = "0.4.50"
-tower-http = { version = "0.6.2", features = ["cors"], optional = true }
+tower-http = { version = "0.6.2", features = [ "cors" ], optional = true }
+sqlx = { version = "0.8.3", features = [ "runtime-tokio", "tls-rustls", "postgres" ], optional = true }
 
 [features]
 hydrate = [
@@ -52,6 +53,7 @@ ssr = [
     "dep:thiserror",
     "dep:comrak",
     "dep:tower-http",
+    "dep:sqlx",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",

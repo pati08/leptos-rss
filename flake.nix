@@ -137,6 +137,7 @@
           tailwindcss
           dive
           cargo-leptos
+          sqlx-cli
         ];
       };
     };

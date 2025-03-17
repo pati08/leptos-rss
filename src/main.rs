@@ -1,5 +1,7 @@
 #![feature(let_chains)]
 
+mod users;
+
 use cfg_if::cfg_if;
 use rss_chat::socket::{ServerMessage, UserMessage};
 

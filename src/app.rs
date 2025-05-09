@@ -20,6 +20,18 @@ use leptos_use::{
 use leptos::wasm_bindgen::prelude::*;
 use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{CustomEvent, EventTarget};
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Clone)]
+struct Settings {
+    notification_settings: NotificationSetting,
+}
+#[derive(Serialize, Deserialize, Clone)]
+enum NotificationSetting {
+    AwayOnly,
+    Always,
+    Never,
+}
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
     view! {
@@ -154,6 +166,9 @@ fn Feed(name: String) -> impl IntoView {
     use crate::socket::*;
     use leptos_use::UseWebSocketReturn;
 
+    let settings =
+        use_cookie::<Settings, codee::string::JsonSerdeCodec>("rss-settings");
+
     let UseWebSocketReturn {
         ready_state,
         message,
@@ -190,6 +205,16 @@ fn Feed(name: String) -> impl IntoView {
 
     let visibility = use_document_visibility();
 
+    {
+        let conn = connection.clone();
+        let vis = if web_sys::VisibilityState::Visible != visibility.get() {
+        } else {
+        };
+        Effect::new(move || {
+            conn.update_visiblity(visibility.get());
+        });
+    }
+
     // Handle read receipts and notifications when receiving new messages
     {
         use leptos::web_sys::VisibilityState;
@@ -198,12 +223,17 @@ fn Feed(name: String) -> impl IntoView {
             if let Some(ServerMessage::MessageSent { message }) =
                 conn.message.get()
             {
-                match visibility.get() {
-                    VisibilityState::Hidden => (use_web_notification().show)(
-                        leptos_use::ShowOptions::default()
-                            .title(format!("Message from {}", message.sender))
-                            .body(message.preview()),
-                    ),
+                match visibility.get_untracked() {
+                    VisibilityState::Hidden => {
+                        (use_web_notification().show)(
+                            leptos_use::ShowOptions::default()
+                                .title(format!(
+                                    "Message from {}",
+                                    message.sender
+                                ))
+                                .body(message.preview()),
+                        );
+                    }
                     VisibilityState::Visible => conn.read_messages(),
                     _ => (),
                 }
@@ -389,7 +419,7 @@ fn Messages(
 
 #[component]
 fn UsersList(
-    users: Signal<Vec<(String, bool)>>,
+    users: Signal<Vec<(String, bool, bool)>>,
     close: impl Fn() + 'static,
 ) -> impl IntoView {
     view! {
@@ -409,8 +439,17 @@ fn UsersList(
         } else {
             view! {
                 <ol class="list-decimal">
-                    {users.get().into_iter().map(|i| view!{
-                        <li class="ml-6">{i.0} {if i.1 { " ⌨️" } else { "" }}</li>
+                    {users.get().into_iter().map(|i| {
+                        let mut status = String::with_capacity(4);
+                        if i.1 {
+                            status.push_str(" ⌨️");
+                        }
+                        if i.2 {
+                            status.push_str(" 👀");
+                        }
+                        view!{
+                            <li class="ml-6">{i.0}{status}</li>
+                        }
                     }).collect::<Vec<_>>()}
                 </ol>
             }.into_any()

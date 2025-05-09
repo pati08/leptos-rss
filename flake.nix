@@ -14,57 +14,17 @@
         inherit system;
         overlays = [ (import rust-overlay) ];
       };
-      inherit (pkgs) lib;
 
+      rustToolchain = pkgs.rust-bin.nightly.latest.default.override {
+        extensions = [ "rust-src" "rust-analyzer" "rustfmt" "rustc-codegen-cranelift-preview" ];
+      };
+      craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
       tomlNameInfo = craneLib.crateNameFromCargoToml { cargoToml = ./Cargo.toml; };
       cargoPkgName = tomlNameInfo.pname;
       inherit (tomlNameInfo) version;
 
-      src = lib.cleanSourceWith {
-        src = ./.;
-        filter = path: type:
-          ((lib.hasSuffix "\.html" path) ||
-          (lib.hasSuffix "\.txt" path) ||
-          (lib.hasSuffix "tailwind.config.js" path) ||
-          (lib.hasInfix "/public/" path) ||
-          (lib.hasInfix "/style/" path) ||
-          (lib.hasInfix "/src/" path) ||
-          (lib.hasInfix "/\.sqlx/" path) ||
-          (craneLib.filterCargoSources path type))
-          && !(
-            (lib.hasInfix "/cargo_cache/" path) ||
-            (lib.hasInfix "/target/" path)
-          );
-      };
-
-      rustToolchain = pkgs.rust-bin.nightly.latest.default.override {
-        extensions = [ "rust-src" "rust-analyzer" "rustfmt" "rustc-codegen-cranelift-preview" ];
-        targets = [ "wasm32-unknown-unknown" "x86_64-unknown-linux-gnu" ];
-      };
-      craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
-
-      commonArgs = {
-        inherit src;
-      };
-
-      serverArgs = commonArgs // {
-        cargoExtraArgs = "--features ssr";
-      };
-      wasmArgs = commonArgs // {
-        cargoExtraArgs = "--target wasm32-unknown-unknown --features hydrate";
-        doCheck = false;
-      };
-      serverArtifacts = craneLib.buildDepsOnly serverArgs;
-      wasmArtifacts = craneLib.buildDepsOnly wasmArgs;
-
-      # Build server binary with SSR feature
-      server = craneLib.buildPackage (serverArgs // {
-        cargoArtifacts = serverArtifacts;
-      });
-      # Build WASM with hydrate feature
-      wasm = craneLib.buildPackage (wasmArgs // {
-        cargoArtifacts = wasmArtifacts;
-      });
+      server = targetPkgs: targetPkgs.callPackage ./nix/serverBuild.nix { inherit crane; };
+      wasm = pkgs.callPackage ./nix/wasmBuild.nix { inherit crane; };
       # Build the site directory 
       siteDerivation = pkgs.stdenv.mkDerivation {
         name = "${cargoPkgName}-site";
@@ -97,14 +57,14 @@
         '';
       };
 
-      dockerImage = pkgs.dockerTools.buildImage {
+      dockerImage = targetPkgs: targetPkgs.dockerTools.buildImage {
         name = cargoPkgName;
         tag = "latest";
 
-        copyToRoot = [ server siteDerivation ];
+        copyToRoot = [ (server targetPkgs) siteDerivation ];
 
         config = {
-          Cmd = [ "${server}/bin/${cargoPkgName}" ];
+          Cmd = [ "${server targetPkgs}/bin/${cargoPkgName}" ];
           Env = [
             "LEPTOS_SITE_DIR=target/site"
             "LEPTOS_SITE_ADDR=0.0.0.0:3000"
@@ -114,13 +74,16 @@
         };
       };
 
+      crossPkgs = import nixpkgs {
+        inherit system;
+        overlays = [ (import rust-overlay) ];
+        crossSystem.config = "aarch64-unknown-linux-gnu";
+      };
+
     in {
       packages.${system} = {
-        default = dockerImage;
-
-        inherit server;
-        inherit wasm;
-        inherit dockerImage;
+        default = dockerImage pkgs;
+        arm = dockerImage crossPkgs;
       };
 
       devShells.${system}.default = pkgs.mkShell {

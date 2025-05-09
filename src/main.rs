@@ -1,7 +1,7 @@
 #![feature(let_chains)]
 
 use cfg_if::cfg_if;
-use rss_chat::socket::{ServerMessage, UserMessage};
+use rss_chat::socket::{ServerMessage, UserMessage, VisibilityState};
 
 cfg_if! {
     if #[cfg(feature = "ssr")] {
@@ -31,6 +31,7 @@ enum ServerStateMessage {
     UserTyped { name: String },
     NewMessage { message: UserMessage },
     UserReadMessages { user: String, earliest: u32 },
+    VisbilityUpdate { user: String, vis: VisibilityState },
 }
 
 #[cfg(feature = "ssr")]
@@ -87,6 +88,7 @@ async fn main() {
             Arc::new(Mutex::new(vec![]));
         let state_broadcast_tx = state_broadcast_tx.clone();
         let mut current_message_id = 0;
+        let mut viewing_users: Vec<String> = Vec::new();
 
         let mut online_users: HashMap<String, u8> = HashMap::new();
 
@@ -229,6 +231,24 @@ async fn main() {
                         earliest,
                     });
                 }
+                ServerStateMessage::VisbilityUpdate { user, vis } => {
+                    match vis {
+                        VisibilityState::Hidden => {
+                            if viewing_users.contains(&user) {
+                                viewing_users.retain(|i| *i != user);
+                                send_msg(ServerMessage::UserNotObserving {
+                                    user,
+                                });
+                            }
+                        }
+                        VisibilityState::Visible => {
+                            if !viewing_users.contains(&user) {
+                                viewing_users.push(user.clone());
+                                send_msg(ServerMessage::UserObserving { user });
+                            }
+                        }
+                    }
+                }
             }
         }
     });
@@ -361,6 +381,15 @@ async fn handle_socket_read(
                     .send(ServerStateMessage::UserReadMessages {
                         user: name.clone(),
                         earliest,
+                    })
+                    .await;
+            }
+            ClientMessage::VisibilityUpdate(vis) => {
+                let _ = state
+                    .state_tx
+                    .send(ServerStateMessage::VisbilityUpdate {
+                        user: name.clone(),
+                        vis,
                     })
                     .await;
             }

@@ -10,12 +10,28 @@ pub struct UserMessage {
     pub id: u32,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum VisibilityState {
+    Hidden,
+    Visible,
+}
+
+impl From<web_sys::VisibilityState> for VisibilityState {
+    fn from(value: web_sys::VisibilityState) -> Self {
+        match value {
+            web_sys::VisibilityState::Visible => Self::Visible,
+            _ => Self::Hidden,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ClientMessage {
     InitMessage { name: String },
     SendMessage { message: UserMessage },
     Typed,
     ReadMessages { earliest: u32 },
+    VisibilityUpdate(VisibilityState),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -27,6 +43,8 @@ pub enum ServerMessage {
     // UserOnline { user: String },
     // UserOffline { user: String },
     OnlineUsersUpdate { users: Vec<String> },
+    UserObserving { user: String },
+    UserNotObserving { user: String },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -65,6 +83,7 @@ where
     messages: RwSignal<Vec<ArcRwSignal<UserMessageClient>>>,
     typing: RwSignal<Vec<String>>,
     online: RwSignal<Vec<String>>,
+    observing: RwSignal<Vec<String>>,
 }
 
 impl<SendFn> ConnectionState<SendFn>
@@ -80,19 +99,24 @@ where
     pub fn online(&self) -> ReadSignal<Vec<String>> {
         self.online.read_only()
     }
-    pub fn users(&self) -> Signal<Vec<(String, bool)>> {
+    pub fn users(&self) -> Signal<Vec<(String, bool, bool)>> {
         let typing = self.typing;
         let online = self.online;
+        let observing = self.observing;
         Signal::derive(move || {
             online
                 .get()
                 .into_iter()
                 .map(move |i| {
                     let is_typing = typing.get().contains(&i);
-                    (i, is_typing)
+                    let is_observing = observing.get().contains(&i);
+                    (i, is_typing, is_observing)
                 })
                 .collect()
         })
+    }
+    pub fn observing(&self) -> ReadSignal<Vec<String>> {
+        self.observing.read_only()
     }
     pub fn new(
         ready: Signal<ConnectionReadyState>,
@@ -104,6 +128,7 @@ where
             RwSignal::new(vec![]);
         let typing = RwSignal::new(vec![]);
         let online: RwSignal<Vec<String>> = RwSignal::new(vec![]);
+        let observing: RwSignal<Vec<String>> = RwSignal::new(vec![]);
         {
             Effect::new(move || {
                 last_message.with(move |last_message| match last_message {
@@ -149,6 +174,19 @@ where
                             }
                         });
                     }
+                    Some(ServerMessage::UserObserving { user }) => {
+                        if !observing.get_untracked().contains(user) {
+                            observing.update(|v| v.push(user.to_string()));
+                        }
+                    }
+                    Some(ServerMessage::UserNotObserving { user }) => observing
+                        .update(move |observing| {
+                            *observing = observing
+                                .iter()
+                                .filter(|i| *i != user)
+                                .cloned()
+                                .collect();
+                        }),
                 })
             });
         }
@@ -173,6 +211,7 @@ where
             messages,
             typing,
             online,
+            observing,
         }
     }
     pub fn send_message(&self, sender: String, message: String) {
@@ -200,5 +239,8 @@ where
     }
     pub fn type_(&self) {
         (self.send)(&ClientMessage::Typed);
+    }
+    pub fn update_visiblity(&self, vis: impl Into<VisibilityState>) {
+        (self.send)(&ClientMessage::VisibilityUpdate(vis.into()));
     }
 }

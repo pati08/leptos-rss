@@ -1,8 +1,8 @@
-use crate::{ai, AppStateExt, ServerStateMessage};
+use crate::{ai, AppStateExt as AppState, ServerStateMessage};
 use rss_chat::socket::UserMessage;
 use thiserror::Error;
 
-pub async fn react_to_message(message: UserMessage, state: AppStateExt) {
+pub async fn react_to_message(message: UserMessage, state: AppState) {
     let user = message.sender.clone();
     let send_msg = move |msg: String, sender: String| async move {
         let _ = state
@@ -101,7 +101,7 @@ enum MessageParseError {
 fn parse_commands(
     message: &str,
 ) -> Option<Result<MessageCommand, MessageParseError>> {
-    let Some('!') = message.chars().next() else {
+    let Some('%') = message.chars().next() else {
         return None;
     };
     let command_input = &message[1..];
@@ -165,10 +165,10 @@ fn parse_commands(
 }
 
 const HELP_MESSAGE: &str = "Valid commands:
-- !ai <message> - ask a question to the default bot (greg)
-- !ask <bot> <message> - ask a question to a bot by name
-- !newbot <name> [lang=<language>] <instructions> - create a new
+- %ai <message> - ask a question to the default bot (greg)
+- %ask <bot> <message> - ask a question to a bot by name
+- %newbot <name> [lang=<language>] <instructions> - create a new
 bot that follows custom instructions
-- !listbots - list bots by name
-- !removebot <bot> - remove a bot (you can only remove a bot you created)
-- !help - show this message";
+- %listbots - list bots by name
+- %removebot <bot> - remove a bot (you can only remove a bot you created)
+- %help - show this message";

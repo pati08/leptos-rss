@@ -433,7 +433,7 @@ fn Messages(
                 <MessageDisplay
                     name=name.clone()
                     message=message.clone()
-                    set_reply=set_reply.clone()
+                    set_reply=set_reply
                     messages=messages/>
             </For>
         </div>
@@ -482,10 +482,10 @@ fn MessageDisplay(
                     }.into_any()
                 }
             }}
-            {reply_box}
             <div class="hover:bg-gray-200 transition flex flex-row w-full">
                 <div class="grow pr-8">
                     <div class="font-bold text-gray-700">{ let message = message.clone(); move || message.get().message.sender }</div>
+                    {reply_box}
                     <div inner_html={ let message = message.clone(); move || message.get().message.message }></div>
                 </div>
                 <div class="text-right text-gray-700 flex flex-row items-center shrink-0">

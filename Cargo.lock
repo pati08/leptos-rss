@@ -2507,7 +2507,7 @@ dependencies = [
 
 [[package]]
 name = "rss-chat"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "async-openai",
  "axum",

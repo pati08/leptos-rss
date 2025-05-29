@@ -12,6 +12,7 @@ pub async fn react_to_message(message: UserMessage, state: AppState) {
                     send_time: chrono::Utc::now(),
                     sender,
                     message: msg,
+                    reply_to: message.reply_to,
                     id: 0,
                 },
             })

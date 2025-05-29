@@ -7,6 +7,7 @@ pub struct UserMessage {
     pub send_time: chrono::DateTime<chrono::Utc>,
     pub sender: String,
     pub message: String,
+    pub reply_to: Option<u32>,
     pub id: u32,
 }
 
@@ -214,7 +215,12 @@ where
             observing,
         }
     }
-    pub fn send_message(&self, sender: String, message: String) {
+    pub fn send_message(
+        &self,
+        sender: String,
+        message: String,
+        reply_to: Option<u32>,
+    ) {
         let send_time = chrono::Utc::now();
         let message = ClientMessage::SendMessage {
             message: UserMessage {
@@ -222,6 +228,7 @@ where
                 send_time,
                 sender,
                 message,
+                reply_to,
             },
         };
         (self.send)(&message);

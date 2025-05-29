@@ -22,6 +22,8 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::web_sys::{CustomEvent, EventTarget};
 use serde::{Deserialize, Serialize};
 
+use crate::socket::UserMessageClient;
+
 #[derive(Serialize, Deserialize, Clone)]
 struct Settings {
     notification_settings: NotificationSetting,
@@ -257,16 +259,18 @@ fn Feed(name: String) -> impl IntoView {
 
     let (message_input, set_message_input) = signal(String::new());
     let message_node_ref: NodeRef<Textarea> = NodeRef::new();
+    let (reply, set_reply) = signal::<Option<u32>>(None);
 
     let on_submit = {
         let connection = connection.clone();
         let name = name.clone();
         move || {
-            connection.send_message(name.clone(), message_input.get());
+            connection.send_message(name.clone(), message_input.get(), reply());
             set_message_input.set(String::new());
             if let Some(message_el) = message_node_ref.get() {
                 let _ = message_el.focus();
             }
+            set_reply.set(None);
         }
     };
 
@@ -282,6 +286,39 @@ fn Feed(name: String) -> impl IntoView {
     };
 
     let (emoji_picker_open, set_emoji_picker_open) = signal(false);
+
+    let reply_text = move || {
+        reply.get().and_then(|r| {
+            messages
+                .get()
+                .iter()
+                .find(|m| m.get().message.id == r)
+                .map(|v| v.get().message.message)
+        })
+    };
+    let reply_box = move || {
+        if let Some(reply_text) = reply_text() {
+            view! {
+                <div class="flex gap-2 justify-center items-center bg-gray-100 py-2 px-4 rounded w-screen">
+                    <div class="grow">
+                        <div class="text-bold text-gray-700 text-sm">"Replying to"</div>
+                        <div inner_html=move || reply_text.clone()></div>
+                    </div>
+                    <button
+                        class="p-1 rounded shadow"
+                        on:click=move |ev| {
+                            set_reply.set(None);
+                            ev.stop_propagation();
+                        }
+                    >
+                        "❌"
+                    </button>
+                </div>
+            }.into_any()
+        } else {
+            ().into_any()
+        }
+    };
 
     view! {
         {
@@ -335,45 +372,49 @@ fn Feed(name: String) -> impl IntoView {
                 false => view!{"Users"}.into_any(),
             }}
         </div>
-        <Messages messages=messages name=name.clone() />
-        <form
-            class="fixed bottom-0 left-0 flex w-screen flex-row items-center justify-center gap-2 bg-gray-200 p-3"
-            on:submit={
-                let on_submit = on_submit.clone();
-                move |ev| {
-                    ev.prevent_default();
-                    on_submit();
-                }
-            }
-        >
-            <div class="h-12 basis-2/3 rounded-sm bg-gray-50 shadow-xl ring-2 ring-gray-100 transition focus:outline-none focus:ring-gray-700 flex flex-row">
-                <textarea
-                    placeholder="Your message..."
-                    required
-                    name="contents"
-                    class="h-12 basis-2/3 rounded-sm bg-gray-50 px-3 ring-2 ring-gray-100 transition focus:outline-none focus:ring-gray-700 w-full flex-grow resize-none"
-                    autocomplete="off"
-                    spellcheck="false"
-                    on:input:target=move |ev| {
-                        set_message_input.set(ev.target().value());
-                        connection.type_();
+        <Messages messages=messages name=name.clone() set_reply=set_reply />
+        <div class="fixed bottom-0 left-0 flex w-screen flex-col items-center justify-center">
+            {reply_box}
+            <form
+                // class="fixed bottom-0 left-0 flex w-screen flex-row items-center justify-center gap-2 bg-gray-200 p-3"
+                class="flex w-screen flex-row items-center justify-center gap-2 bg-gray-200 p-3"
+                on:submit={
+                    let on_submit = on_submit.clone();
+                    move |ev| {
+                        ev.prevent_default();
+                        on_submit();
                     }
-                    on:keydown={
-                        let on_submit = on_submit.clone();
-                        move |ev| {
-                            if ev.key() == "Enter" && !ev.shift_key() {
-                                ev.prevent_default();
-                                on_submit();
+                }
+            >
+                <div class="h-12 basis-2/3 rounded-sm bg-gray-50 shadow-xl ring-2 ring-gray-100 transition focus:outline-none focus:ring-gray-700 flex flex-row">
+                    <textarea
+                        placeholder="Your message..."
+                        required
+                        name="contents"
+                        class="h-12 basis-2/3 rounded-sm bg-gray-50 px-3 ring-2 ring-gray-100 transition focus:outline-none focus:ring-gray-700 w-full flex-grow resize-none"
+                        autocomplete="off"
+                        spellcheck="false"
+                        on:input:target=move |ev| {
+                            set_message_input.set(ev.target().value());
+                            connection.type_();
+                        }
+                        on:keydown={
+                            let on_submit = on_submit.clone();
+                            move |ev| {
+                                if ev.key() == "Enter" && !ev.shift_key() {
+                                    ev.prevent_default();
+                                    on_submit();
+                                }
                             }
                         }
-                    }
-                    prop:value=message_input
-                    node_ref=message_node_ref
-                ></textarea>
-                <img src="emoji.png" class="max-h-full hover:cursor-pointer" on:click=move |_ev| set_emoji_picker_open.set(true) />
-            </div>
-            <button type="submit" class="h-12 basis-10 cursor-pointer rounded-sm bg-gray-50 px-3 font-bold shadow-xl ring-2 ring-gray-100 transition hover:bg-gray-800 hover:text-white hover:ring-0">"Send"</button>
-        </form>
+                        prop:value=message_input
+                        node_ref=message_node_ref
+                    ></textarea>
+                    <img src="emoji.png" class="max-h-full hover:cursor-pointer" on:click=move |_ev| set_emoji_picker_open.set(true) />
+                </div>
+                <button type="submit" class="h-12 basis-10 cursor-pointer rounded-sm bg-gray-50 px-3 font-bold shadow-xl ring-2 ring-gray-100 transition hover:bg-gray-800 hover:text-white hover:ring-0">"Send"</button>
+            </form>
+        </div>
     }
 }
 
@@ -381,6 +422,7 @@ fn Feed(name: String) -> impl IntoView {
 fn Messages(
     messages: ReadSignal<Vec<ArcRwSignal<crate::socket::UserMessageClient>>>,
     name: String,
+    set_reply: WriteSignal<Option<u32>>,
 ) -> impl IntoView {
     view! {
         <div>
@@ -388,31 +430,85 @@ fn Messages(
                 each=move || messages.get().into_iter().rev()
                 key=|message| message.get().message.id
                 let:message>
-                <div class="hover:bg-gray-200 transition w-screen px-2 py-4">
-                    {let message = message.clone(); let name = name.clone(); move || {
-                        let message = message.get();
-                        let read_by = message.read_by.into_iter().filter(|i| *i != name && *i != message.message.sender).collect::<Vec<_>>();
-                        if read_by.is_empty() {
-                            ().into_any()
-                        } else {
-                            view!{
-                                <div>"Read by: " {read_by.join(", ")}</div>
-                            }.into_any()
+                <MessageDisplay
+                    name=name.clone()
+                    message=message.clone()
+                    set_reply=set_reply.clone()
+                    messages=messages/>
+            </For>
+        </div>
+    }
+}
+
+#[component]
+fn MessageDisplay(
+    name: String,
+    message: ArcRwSignal<UserMessageClient>,
+    set_reply: WriteSignal<Option<u32>>,
+    messages: ReadSignal<Vec<ArcRwSignal<UserMessageClient>>>,
+) -> impl IntoView {
+    let message_2 = message.clone();
+    let reply_text = move || {
+        message_2.get().message.reply_to.and_then(|r| {
+            messages
+                .get()
+                .iter()
+                .find(|m| m.get().message.id == r)
+                .map(|v| v.get().message.message)
+        })
+    };
+    let reply_box = move || {
+        if let Some(reply_text) = reply_text() {
+            view! {
+            <div class="bg-gray-100 pl-2 pr-20 py-1 rounded mb-2">
+                <div class="italic text-gray-700 text-sm">"Replying to"</div>
+                <div inner_html=move || reply_text.clone()></div>
+            </div>
+        }
+        .into_any()
+        } else {
+            ().into_any()
+        }
+    };
+    view! {
+        <div class="hover:bg-gray-200 transition w-screen px-2 py-4">
+            {let message = message.clone(); let name = name.clone(); move || {
+                let read_by = message.get().read_by.into_iter().filter(|i| *i != name && *i != message.get().message.sender).collect::<Vec<_>>();
+                if read_by.is_empty() {
+                    ().into_any()
+                } else {
+                    view!{
+                        <div>"Read by: " {read_by.join(", ")}</div>
+                    }.into_any()
+                }
+            }}
+            {reply_box}
+            <div class="hover:bg-gray-200 transition flex flex-row w-full">
+                <div class="grow pr-8">
+                    <div class="font-bold text-gray-700">{ let message = message.clone(); move || message.get().message.sender }</div>
+                    <div inner_html={ let message = message.clone(); move || message.get().message.message }></div>
+                </div>
+                <div class="text-right text-gray-700 flex flex-row items-center shrink-0">
+                    <div class="text-right w-full">
+                        {
+                            let message = message.clone();
+                            move || format_datetime(message.get().message.send_time)
                         }
-                    }}
-                    <div class="hover:bg-gray-200 transition flex flex-row w-full">
-                        <div class="grow pr-8">
-                            <div class="font-bold text-gray-700">{ let message = message.clone(); move || message.get().message.sender }</div>
-                            <div inner_html={ let message = message.clone(); move || message.get().message.message }></div>
-                        </div>
-                        <div class="text-right text-gray-700 flex flex-row items-center shrink-0">
-                            <div class="text-right w-full">
-                                {move || format_datetime(message.get().message.send_time) }
-                            </div>
-                        </div>
                     </div>
                 </div>
-            </For>
+                <div class="flex flex-col items-center justify-center ml-3">
+                    <button
+                        class="p-2 rounded shadow bg-white hover:bg-gray-200 active:bg-gray-400 transition hover:cursor-pointer"
+                        on:click=
+                            move |ev| {
+                                ev.prevent_default();
+                                set_reply.set(Some(message.get().message.id))
+                            }
+                    >
+                        "Reply"
+                    </button>
+                </div>
+            </div>
         </div>
     }
 }

@@ -233,7 +233,7 @@ fn Feed(name: String) -> impl IntoView {
                                     "Message from {}",
                                     message.sender
                                 ))
-                                .body(message.preview()),
+                                .body(message.get_short()),
                         );
                     }
                     VisibilityState::Visible => conn.read_messages(),
@@ -287,38 +287,16 @@ fn Feed(name: String) -> impl IntoView {
 
     let (emoji_picker_open, set_emoji_picker_open) = signal(false);
 
-    let reply_text = move || {
+    let reply_message = move || {
         reply.get().and_then(|r| {
             messages
                 .get()
                 .iter()
                 .find(|m| m.get().message.id == r)
-                .map(|v| v.get().message.message)
+                .map(|v| v.get().clone())
         })
     };
-    let reply_box = move || {
-        if let Some(reply_text) = reply_text() {
-            view! {
-                <div class="flex gap-2 justify-center items-center bg-gray-100 py-2 px-4 rounded w-screen">
-                    <div class="grow">
-                        <div class="text-bold text-gray-700 text-sm">"Replying to"</div>
-                        <div inner_html=move || reply_text.clone()></div>
-                    </div>
-                    <button
-                        class="p-1 rounded shadow"
-                        on:click=move |ev| {
-                            set_reply.set(None);
-                            ev.stop_propagation();
-                        }
-                    >
-                        "❌"
-                    </button>
-                </div>
-            }.into_any()
-        } else {
-            ().into_any()
-        }
-    };
+    let reply_message = Signal::derive(reply_message);
 
     view! {
         {
@@ -374,7 +352,7 @@ fn Feed(name: String) -> impl IntoView {
         </div>
         <Messages messages=messages name=name.clone() set_reply=set_reply />
         <div class="fixed bottom-0 left-0 flex w-screen flex-col items-center justify-center">
-            {reply_box}
+            <ReplyInfo message=reply_message />
             <form
                 // class="fixed bottom-0 left-0 flex w-screen flex-row items-center justify-center gap-2 bg-gray-200 p-3"
                 class="flex w-screen flex-row items-center justify-center gap-2 bg-gray-200 p-3"
@@ -419,6 +397,35 @@ fn Feed(name: String) -> impl IntoView {
 }
 
 #[component]
+fn ReplyInfo(message: Signal<Option<UserMessageClient>>) -> impl IntoView {
+    move || {
+        if let Some(UserMessageClient {
+            message:
+                crate::socket::UserMessage {
+                    sender: sender_name,
+                    message_short: reply_text,
+                    ..
+                },
+            ..
+        }) = message.get()
+        {
+            view! {
+                <div class="bg-gray-100 pl-2 pr-20 py-1 rounded mb-2">
+                    <div class="text-gray-700 text-sm">
+                        <span class="italic">"Replying to "</span>
+                        {sender_name}
+                    </div>
+                    <div inner_html=move || reply_text.clone()></div>
+                </div>
+            }
+            .into_any()
+        } else {
+            ().into_any()
+        }
+    }
+}
+
+#[component]
 fn Messages(
     messages: ReadSignal<Vec<ArcRwSignal<crate::socket::UserMessageClient>>>,
     name: String,
@@ -448,28 +455,16 @@ fn MessageDisplay(
     messages: ReadSignal<Vec<ArcRwSignal<UserMessageClient>>>,
 ) -> impl IntoView {
     let message_2 = message.clone();
-    let reply_text = move || {
+    let reply_message = move || {
         message_2.get().message.reply_to.and_then(|r| {
             messages
                 .get()
                 .iter()
                 .find(|m| m.get().message.id == r)
-                .map(|v| v.get().message.message)
+                .map(|v| v.get().clone())
         })
     };
-    let reply_box = move || {
-        if let Some(reply_text) = reply_text() {
-            view! {
-            <div class="bg-gray-100 pl-2 pr-20 py-1 rounded mb-2">
-                <div class="italic text-gray-700 text-sm">"Replying to"</div>
-                <div inner_html=move || reply_text.clone()></div>
-            </div>
-        }
-        .into_any()
-        } else {
-            ().into_any()
-        }
-    };
+    let reply_message = Signal::derive(reply_message);
     view! {
         <div class="hover:bg-gray-200 transition w-screen px-2 py-4">
             {let message = message.clone(); let name = name.clone(); move || {
@@ -485,8 +480,8 @@ fn MessageDisplay(
             <div class="hover:bg-gray-200 transition flex flex-row w-full">
                 <div class="grow pr-8">
                     <div class="font-bold text-gray-700">{ let message = message.clone(); move || message.get().message.sender }</div>
-                    {reply_box}
-                    <div inner_html={ let message = message.clone(); move || message.get().message.message }></div>
+                    <ReplyInfo message=reply_message />
+                    <div inner_html={ let message = message.clone(); move || message.get().message.message_html_safe }></div>
                 </div>
                 <div class="text-right text-gray-700 flex flex-row items-center shrink-0">
                     <div class="text-right w-full">

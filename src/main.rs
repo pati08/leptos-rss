@@ -1,5 +1,10 @@
 #![feature(let_chains)]
 
+// TODO:
+// - [ ] Improve connection reliability
+// - [ ] Improve visibility detection
+// - [ ] Add message editing
+
 use cfg_if::cfg_if;
 use rss_chat::socket::{ServerMessage, UserMessage, VisibilityState};
 
@@ -162,8 +167,8 @@ async fn main() {
                     let original = message.clone();
                     message.id = current_message_id;
                     current_message_id += 1;
-                    message.message = message
-                        .message
+                    let mut message_html_safe = message
+                        .message_md
                         .lines()
                         .map(|line| line.trim_end()) // Trim trailing spaces
                         .collect::<Vec<_>>() // Collect into a Vec
@@ -198,14 +203,17 @@ async fn main() {
                     comrak_options.render.ignore_empty_links = true;
                     comrak_options.parse.smart = true;
 
-                    message.message = comrak::markdown_to_html(
-                        &message.message,
+                    message_html_safe = comrak::markdown_to_html(
+                        &message_html_safe,
                         &comrak_options,
                     );
+                    message.message_html_safe = Some(message_html_safe);
+                    message.message_short = Some(message.get_short());
                     log::debug!("Sending message:\n{message:?}");
                     send_msg(ServerMessage::MessageSent {
                         message: message.clone(),
                     });
+
                     let app_state = app_state.clone();
                     tokio::spawn(async move {
                         commands::react_to_message(original, app_state).await;

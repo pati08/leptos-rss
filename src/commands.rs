@@ -11,7 +11,9 @@ pub async fn react_to_message(message: UserMessage, state: AppState) {
                 message: UserMessage {
                     send_time: chrono::Utc::now(),
                     sender,
-                    message: msg,
+                    message_md: msg,
+                    message_short: None,
+                    message_html_safe: None,
                     reply_to: message.reply_to,
                     id: 0,
                 },
@@ -20,7 +22,7 @@ pub async fn react_to_message(message: UserMessage, state: AppState) {
     };
     let send_msgc = send_msg.clone();
     let send_sysmsg = move |msg: String| send_msgc(msg, "System".to_string());
-    match parse_commands(&message.message) {
+    match parse_commands(&message.message_md) {
         Some(Ok(command)) => match command {
             MessageCommand::AIQuery { bot, query } => {
                 let response = state

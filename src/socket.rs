@@ -2,11 +2,14 @@ use leptos::prelude::*;
 use leptos_use::core::ConnectionReadyState;
 use serde::{Deserialize, Serialize};
 
+// TODO: Split this into two types for before and after the server does its thing
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UserMessage {
     pub send_time: chrono::DateTime<chrono::Utc>,
     pub sender: String,
-    pub message: String,
+    pub message_md: String,
+    pub message_short: Option<String>,
+    pub message_html_safe: Option<String>,
     pub reply_to: Option<u32>,
     pub id: u32,
 }
@@ -41,8 +44,6 @@ pub enum ServerMessage {
     MessageSent { message: UserMessage },
     UserTyping { user: String },
     UserStoppedTyping { user: String },
-    // UserOnline { user: String },
-    // UserOffline { user: String },
     OnlineUsersUpdate { users: Vec<String> },
     UserObserving { user: String },
     UserNotObserving { user: String },
@@ -65,11 +66,16 @@ impl std::fmt::Display for Heartbeat {
 }
 
 impl UserMessage {
-    pub fn preview(&self) -> String {
-        if self.message.len() <= 40 {
-            self.message.clone()
+    // TODO: reconsider formatting for this
+    pub fn get_short(&self) -> String {
+        let message_oneline = self.message_md.replace('\n', " ⏎  ");
+        if message_oneline.len() <= 40 {
+            message_oneline
         } else {
-            format!("{}...", self.message.chars().take(37).collect::<String>())
+            format!(
+                "{}...",
+                message_oneline.chars().take(37).collect::<String>()
+            )
         }
     }
 }
@@ -227,7 +233,9 @@ where
                 id: 0,
                 send_time,
                 sender,
-                message,
+                message_md: message,
+                message_short: None,
+                message_html_safe: None,
                 reply_to,
             },
         };
